@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: poston-config
+  namespace: frag-wksp
+data:
+  # Database configuration
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "poston_db"
+  DB_USER: "poston_user"
+  
+  # Backend configuration
+  PORT: "3001"
+  NODE_ENV: "production"
+  JWT_EXPIRES_IN: "7d"
+  FRONTEND_URL: "http://frontend-service"
+  
+  # Frontend configuration
+  REACT_APP_API_URL: "http://backend-service:3001/api"
+  REACT_APP_ENVIRONMENT: "production"

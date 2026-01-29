@@ -1,0 +1,135 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: frag-wksp
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+      - name: git-clone-and-build
+        image: public.ecr.aws/docker/library/node:20-alpine
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "Installing git..."
+          apk add --no-cache git
+          
+          echo "Cloning repository..."
+          git clone https://github.com/FragJage/PostOn.git /tmp/repo
+          
+          echo "Copying backend files..."
+          cp -r /tmp/repo/backend/* /app/
+          
+          echo "Installing dependencies..."
+          cd /app
+          yarn install
+          
+          echo "Building TypeScript..."
+          yarn build
+          
+          echo "Build complete!"
+          ls -la /app/dist
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      containers:
+      - name: backend
+        image: public.ecr.aws/docker/library/node:20-alpine
+        workingDir: /app
+        command:
+        - node
+        - dist/server.js
+        ports:
+        - containerPort: 3001
+          name: http
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: poston-secrets
+              key: DB_PASSWORD
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: PORT
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: NODE_ENV
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: poston-secrets
+              key: JWT_SECRET
+        - name: JWT_EXPIRES_IN
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: JWT_EXPIRES_IN
+        - name: FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: poston-config
+              key: FRONTEND_URL
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      volumes:
+      - name: app-code
+        emptyDir: {}
+      tolerations:
+      - key: "oci.oraclecloud.com/oke-is-preemptible"
+        operator: "Exists"
+        effect: "NoSchedule"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: frag-wksp
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3001
+    targetPort: 3001
+    protocol: TCP
+    name: http
+  selector:
+    app: backend
